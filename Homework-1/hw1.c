@@ -7,9 +7,9 @@
 
 typedef struct connection
 {
-    char proto[5];
+    char proto[6];
     char localAddress[50];
-    char foreingAddress[50];
+    char foreignAddress[50];
     char PIDProgram[100];
     struct connection* next;   
 } connection;
@@ -21,24 +21,36 @@ void printConnections(connection* connections)
     connection* tmp = connections;
     while (tmp != NULL)
     {
-        printf("%s\t%s\t%s\t%s\n", tmp->proto, tmp->localAddress, tmp->foreingAddress, tmp->PIDProgram);
+        printf("%s\t%s\t%s\t%s\n", tmp->proto, tmp->localAddress, tmp->foreignAddress, tmp->PIDProgram);
         tmp = tmp->next;
     }
 }
 
 
 // create a connection node
-connection* createNode(char* proto, char* localAddress, char* foreingAddress, char* PIDProgram)
+connection* createNode(char* proto, char* localAddress, char* foreignAddress, char* PIDProgram)
 {
     // create a link
     connection *node = (connection*) malloc(sizeof(connection));
     strcpy(node->proto, proto);
     strcpy(node->localAddress, localAddress);
-    strcpy(node->foreingAddress, foreingAddress);
+    strcpy(node->foreignAddress, foreignAddress);
     strcpy(node->PIDProgram, PIDProgram);
     node->next = NULL;
  
     return node;
+}
+
+
+// initiate a head note
+connection* initiateHead()
+{
+    char proto[] = "Proto";
+    char localAddress[] = "Local Address";
+    char foreignAddress[] = "Foreign Address";
+    char PID[] = "PID/Program name and arguments";
+
+    return createNode(proto, localAddress, foreignAddress, PID);
 }
 
 
@@ -108,7 +120,9 @@ connection* dumpFile2Connections(const char *fileName, connection* connections)
     if (file == NULL)
         exit(EXIT_FAILURE);
 
-    //read line by line
+    // read the first line
+    read = getline(&line, &len, file);
+    // read line by line
     while ((read = getline(&line, &len, file)) != -1) {
         char** subString = parseString2SubStrings(line);
         // create a connection node
@@ -126,17 +140,16 @@ connection* dumpFile2Connections(const char *fileName, connection* connections)
 
 connection* TCP_Handler()
 {
-    // find length first
-    connection* connections = NULL;
+    connection* TCPConnections = NULL;
     // read tcp connections
-    connections = dumpFile2Connections("/proc/net/tcp", connections);
-    return connections;
+    TCPConnections = dumpFile2Connections("/proc/net/tcp", TCPConnections);
+    return TCPConnections;
 };
 
 
 int main(int argc, char **argv[])
 {
-    connection* connections = NULL;
+    connection* connections = initiateHead();    
     connections = insertEnd(connections, TCP_Handler());
     printConnections(connections);
     return 0;
