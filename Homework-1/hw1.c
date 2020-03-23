@@ -9,8 +9,9 @@
 #include <unistd.h>
 
 
-#define tcp_path "/proc/net/tcp"
-#define tcp6_path "/proc/net/tcp6"
+#define connectionsPath "/proc/net/"
+#define tcp "tcp"
+#define tcp6 "tcp6"
 
 char proc[] = "/proc";
 char cmdline[] = "/cmdline";
@@ -24,7 +25,7 @@ typedef struct connection
     char proto[6];
     char localAddress[50];
     char foreignAddress[50];
-    char PIDProgram[100];
+    char PIDProgram[1024];
     struct connection* next;   
 } connection;
 
@@ -125,7 +126,7 @@ char** parseStrToSubStrs(char* str, char* delim)
         abort();
     }
     // copy sub-string to the array
-    if (result)
+    else    
     {
         char *ptr = strtok(str, delim);
         int index = 0;
@@ -240,7 +241,10 @@ bool checkInodeMatchPID(char* inode, char* PID)
             char bufSymbolicLink[256] = "";
             readlink(path, bufSymbolicLink, sizeof(bufSymbolicLink));
             if (strstr(bufSymbolicLink, inode) != NULL)
+            {
                 result = true;
+                break;
+            }
         }
     }
 
@@ -298,7 +302,7 @@ void printConnections(connection* connections)
 connection* createNode(char* proto, char* localAddress, char* foreignAddress, char* PIDProgram)
 {
     // create a link
-    connection *node = (connection*) malloc(sizeof(connection));
+    connection* node = (connection*) malloc(sizeof(connection));
     if (node == NULL)
     {
         fprintf(stderr, "Fatal: failed to allocate bytes!\n");
@@ -349,7 +353,7 @@ connection* insertEnd(connection* connections1, connection* connections2)
 
 
 // dump a file (tcp/tcp6/udp/udp6)
-connection* dumpFileToConnections(const char *fileName, connection* connections)
+connection* dumpFileToConnections(char* connectionType, connection* connections)
 {
     FILE * file;
     char * line = NULL;
@@ -357,6 +361,15 @@ connection* dumpFileToConnections(const char *fileName, connection* connections)
     size_t read;
     char* space = " ";
     char* colon = ":";
+
+    char* fileName = (char*) malloc(sizeof(char) * (strlen(connectionsPath) + strlen(connectionsPath) + 1));
+    if (fileName == NULL)
+    {
+        fprintf(stderr, "Fatal: failed to allocate bytes!\n");
+        abort();
+    }
+    strcpy(fileName, connectionsPath);
+    strcat(fileName, connectionType);
 
     file = fopen(fileName, "r");
     if (file == NULL)
@@ -372,7 +385,7 @@ connection* dumpFileToConnections(const char *fileName, connection* connections)
         char* localAddress = formatIpAndPort(subString[1]);
         char* foreignAddress = formatIpAndPort(subString[2]);    
         // create a connection node
-        connection* node = createNode("tcp", localAddress, foreignAddress, inodeToPID(subString[9]));
+        connection* node = createNode(connectionType, localAddress, foreignAddress, inodeToPID(subString[9]));
         connections = insertEnd(connections, node);
     }
 
@@ -389,7 +402,8 @@ connection* TCP_Handler()
 {
     connection* TCPConnections = NULL;
     // read tcp connections
-    TCPConnections = dumpFileToConnections(tcp_path, TCPConnections);
+    TCPConnections = dumpFileToConnections(tcp, TCPConnections);
+    TCPConnections = dumpFileToConnections(tcp6, TCPConnections);
     return TCPConnections;
 };
 
