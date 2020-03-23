@@ -53,6 +53,11 @@ char* strToPort(char* str)
         exit(EXIT_FAILURE);
     }
     char* port = (char*) malloc(sizeof(char) * 6);
+    if (port == NULL)
+    {
+        fprintf(stderr, "Fatal: failed to allocate bytes!\n");
+        abort();
+    }
     unsigned int num = (unsigned int)strtol(str, NULL, 16);
     if(num == 0)
 	    return "*";
@@ -67,7 +72,17 @@ char* strToIp(char* str)
     struct in_addr inaddr;
     struct in6_addr in6addr;
     char* buf = (char*) malloc(sizeof(char) * INET_ADDRSTRLEN);
+    if (buf == NULL)
+    {
+        fprintf(stderr, "Fatal: failed to allocate bytes!\n");
+        abort();
+    }
     char* buf6 = (char*) malloc(sizeof(char) * INET6_ADDRSTRLEN);
+    if (buf6 == NULL)
+    {
+        fprintf(stderr, "Fatal: failed to allocate bytes!\n");
+        abort();
+    }
 
     // convert the hex-string to uint32
 	inaddr.s_addr = (unsigned int)strtol(str, NULL, 16);
@@ -86,7 +101,13 @@ char** parseStrToSubStrs(char* str, char* delim)
 {
     char** result;
     int count = 0;
-    char* tmp = strdup(str);
+    char* tmp = (char*) malloc(sizeof(char) * strlen(str) + 1);
+    if (tmp == NULL)
+    {
+        fprintf(stderr, "Fatal: failed to allocate bytes!\n");
+        abort();
+    }
+    strcpy(tmp, str);
 
 	char *ptr = strtok(tmp, delim);
 
@@ -98,7 +119,11 @@ char** parseStrToSubStrs(char* str, char* delim)
 	}
 
     result = malloc(sizeof(char*) * count);
-
+    if (result == NULL)
+    {
+        fprintf(stderr, "Fatal: failed to allocate bytes!\n");
+        abort();
+    }
     // copy sub-string to the array
     if (result)
     {
@@ -106,7 +131,14 @@ char** parseStrToSubStrs(char* str, char* delim)
         int index = 0;
         while(ptr != NULL)
         {
-            *(result + index++) = strdup(ptr);
+            char* tmpResult = (char*) malloc(sizeof(char) * strlen(ptr) + 1);
+            if (tmpResult == NULL)
+            {
+                fprintf(stderr, "Fatal: failed to allocate bytes!\n");
+                abort();
+            }
+            strcpy(tmpResult, ptr);
+            *(result + index++) = tmpResult;
             ptr = strtok(NULL, delim);
         }
     }
@@ -188,7 +220,7 @@ bool checkInodeMatchPID(char* inode, char* PID)
     pDir = opendir(fdPath);
     if (pDir == NULL)
     {
-            printf ("Cannot open directory %s, try checking permission or this process is killed!\n", fdPath);
+            printf ("Cannot open directory %s, try checking permission OR this directory is blocked by other OR this process is killed!\n", fdPath);
             exit(EXIT_FAILURE);
     }
 
@@ -211,6 +243,9 @@ bool checkInodeMatchPID(char* inode, char* PID)
                 result = true;
         }
     }
+
+    closedir(pDir);
+
     return result;
 }
 
@@ -219,6 +254,7 @@ bool checkInodeMatchPID(char* inode, char* PID)
 char* inodeToPID(char* inode)
 {
     char* result = "";
+
     // open a directory
     DIR* pDir; // pointer directory
     pDir = opendir(proc);
@@ -239,6 +275,7 @@ char* inodeToPID(char* inode)
             break;
         }
     }
+
     closedir(pDir);
 
     return result;
@@ -262,6 +299,11 @@ connection* createNode(char* proto, char* localAddress, char* foreignAddress, ch
 {
     // create a link
     connection *node = (connection*) malloc(sizeof(connection));
+    if (node == NULL)
+    {
+        fprintf(stderr, "Fatal: failed to allocate bytes!\n");
+        abort();
+    }
     strcpy(node->proto, proto);
     strcpy(node->localAddress, localAddress);
     strcpy(node->foreignAddress, foreignAddress);
@@ -306,7 +348,7 @@ connection* insertEnd(connection* connections1, connection* connections2)
 }
 
 
-// dump a file (tcp/tcp6/upd/upd6)
+// dump a file (tcp/tcp6/udp/udp6)
 connection* dumpFileToConnections(const char *fileName, connection* connections)
 {
     FILE * file;
