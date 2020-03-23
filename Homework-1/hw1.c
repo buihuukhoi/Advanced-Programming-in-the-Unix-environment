@@ -4,11 +4,21 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <errno.h>
+#include <stdbool.h>
+#include <dirent.h>
+#include <unistd.h>
+
 
 #define tcp_path "/proc/net/tcp"
 #define tcp6_path "/proc/net/tcp6"
 
+char proc[] = "/proc";
+char cmdline[] = "/cmdline";
+char fd[] = "/fd";
+char slash[] = "/";
 
+
+// define a truct to store a connection information
 typedef struct connection
 {
     char proto[6];
@@ -25,7 +35,7 @@ char* concatStrs(const char *s1, const char *s2)
     char* result = malloc(strlen(s1) + strlen(s2) + 1); // +1 for the null-terminator
     if (result == NULL)
     {
-        fprintf(stderr, "Fatal: failed to allocate bytes.\n");
+        fprintf(stderr, "Fatal: failed to allocate bytes!\n");
         abort();
     }
     strcpy(result, s1);
@@ -39,7 +49,7 @@ char* strToPort(char* str)
 {
     if (strlen(str) > 5)
     {
-        perror("Port number is invalid!!!");
+        perror("Port number is invalid!");
         exit(EXIT_FAILURE);
     }
     char* port = (char*) malloc(sizeof(char) * 6);
@@ -117,6 +127,121 @@ char* formatIpAndPort(char* str)
     if (strlen(ipColonPort) < 16) // 16 space ~ 2 tab
         ipColonPort = concatStrs(ipColonPort, "\t");
     return ipColonPort;
+}
+
+
+// check whether a string contain only numbers
+bool checkStrContainNums(char* str)
+{
+    int n = strlen(str);
+    for (int index=0; index<n; index++)
+        if (str[index] < 48 || str[index] > 57)
+            return false;
+    return true;
+}
+
+
+// // get "PID/Program name and arguments" from an PID 
+char* getPIDProcNameAndArg(char* PID)
+{
+    char* result = PID;
+
+    char cmdlinePath[50];
+    strcpy(cmdlinePath, proc);
+    strcat(cmdlinePath, slash);
+    strcat(cmdlinePath, PID);
+    strcat(cmdlinePath, cmdline); // example: /proc/[PID]/cmdline
+
+    // open and read lines in a file
+    FILE * fp;
+    char * line = NULL;
+    size_t len = 0;
+    ssize_t read;
+
+    fp = fopen(cmdlinePath, "r");
+    if (fp == NULL)
+        exit(EXIT_FAILURE);
+    while ((read = getline(&line, &len, fp)) != -1) {
+        result = concatStrs(result, line);
+    }
+
+    if (line)
+        free(line);
+    fclose(fp);
+
+    return result;
+}
+
+
+// check whether an inode is matched with a PID
+bool checkInodeMatchPID(char* inode, char* PID)
+{
+    bool result = false;
+    char fdPath[50];
+    strcpy(fdPath, proc);
+    strcat(fdPath, slash);
+    strcat(fdPath, PID);
+    strcat(fdPath, fd);
+
+    // open a directory
+    DIR* pDir;
+    pDir = opendir(fdPath);
+    if (pDir == NULL)
+    {
+            printf ("Cannot open directory %s, try checking permission or this process is killed!\n", fdPath);
+            exit(EXIT_FAILURE);
+    }
+
+    // read each entry into the directory that opened above
+    struct dirent* pDirEntry;
+    while ((pDirEntry = readdir(pDir)) != NULL)
+    {
+        char* name = pDirEntry->d_name;
+        if (checkStrContainNums(name))
+        {
+            char path[50];
+            strcpy(path, fdPath);
+            strcat(path, slash);
+            strcat(path, name); // example: /proc/[PID]/fd/[numbers]
+
+            //read a Synbolic Link
+            char bufSymbolicLink[256] = "";
+            readlink(path, bufSymbolicLink, sizeof(bufSymbolicLink));
+            if (strstr(bufSymbolicLink, inode) != NULL)
+                result = true;
+        }
+    }
+    return result;
+}
+
+
+// get "PID/Program name and arguments" from an inode
+char* inodeToPID(char* inode)
+{
+    char* result = "";
+    // open a directory
+    DIR* pDir; // pointer directory
+    pDir = opendir(proc);
+    if (pDir == NULL)
+    {
+            printf ("Cannot open directory %s!\n", proc);
+            exit(EXIT_FAILURE);
+    }
+
+    // read each entry into the directory that opened above
+    struct dirent* pDirEntry; // pointer for directory entry
+    while ((pDirEntry = readdir(pDir)) != NULL)
+    {
+        char* name = pDirEntry->d_name; // PID
+        if (checkStrContainNums(name) && checkInodeMatchPID(inode, name))
+        {
+            result = getPIDProcNameAndArg(name);
+            break;
+        }
+    }
+    closedir(pDir);
+
+    return result;
 }
 
 
@@ -205,7 +330,7 @@ connection* dumpFileToConnections(const char *fileName, connection* connections)
         char* localAddress = formatIpAndPort(subString[1]);
         char* foreignAddress = formatIpAndPort(subString[2]);    
         // create a connection node
-        connection* node = createNode("tcp", localAddress, foreignAddress, "pid");
+        connection* node = createNode("tcp", localAddress, foreignAddress, inodeToPID(subString[9]));
         connections = insertEnd(connections, node);
     }
 
@@ -222,7 +347,7 @@ connection* TCP_Handler()
 {
     connection* TCPConnections = NULL;
     // read tcp connections
-    TCPConnections = dumpFileToConnections("/proc/net/tcp", TCPConnections);
+    TCPConnections = dumpFileToConnections(tcp_path, TCPConnections);
     return TCPConnections;
 };
 
