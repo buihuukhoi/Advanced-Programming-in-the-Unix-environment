@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <getopt.h>
 
 
 #define connectionsPath "/proc/net/"
@@ -332,6 +333,32 @@ void printConnections(connection* connections)
 }
 
 
+// filter connections
+void filterConnections(connection* connections, char* str)
+{
+    connection* previousNode;
+    connection* tmp = connections;
+    if (tmp != NULL)
+    {
+        previousNode = tmp;
+        tmp = tmp->next;
+    }
+    while (tmp != NULL)
+    {
+        if (strstr(tmp->proto, str) == NULL
+            && strstr(tmp->localAddress, str) == NULL
+            && strstr(tmp->foreignAddress, str) == NULL
+            && strstr(tmp->PIDProgram, str) == NULL)
+        {
+            previousNode->next = tmp->next;
+        }
+        else
+            previousNode = tmp; // same with previous->next
+        tmp = tmp->next;
+    }
+}
+
+
 // create a connection node
 connection* createNode(char* proto, char* localAddress, char* foreignAddress, char* PIDProgram)
 {
@@ -454,18 +481,80 @@ connection* connectionsHandler(bool tcpFlag)
 };
 
 
-int main(int argc, char **argv[])
+int main(int argc, char **argv)
 {
-    // tcp
-    connection* tcpConnections = initiateHead();
-    tcpConnections = insertEnd(tcpConnections, connectionsHandler(true));
-    printf("List of TCP connections:\n");
-    printConnections(tcpConnections);
+    char* filterStr = "";
+    connection* tcpConnections = NULL;
+    connection* udpConnections = NULL;
 
-    // udp
-    connection* udpConnections = initiateHead();
-    udpConnections = insertEnd(udpConnections, connectionsHandler(false));
-    printf("List of UDP connections:\n");
-    printConnections(udpConnections);
+    int c;
+    const char* optStr = "tu"; 
+    static struct option long_options[] = 
+    {
+        {"tcp", no_argument, NULL, 't'},
+        {"udp", no_argument, NULL, 'u'}
+    };
+    int optionIndex = 0;
+
+    while ((c = getopt_long(argc, argv, optStr, long_options, &optionIndex)) != -1)
+    {
+        switch (c)
+        {
+        // tcp
+        case 't':
+            tcpConnections = initiateHead();
+            tcpConnections = insertEnd(tcpConnections, connectionsHandler(true));
+            break;
+        // udp
+        case 'u':
+            udpConnections = initiateHead();
+            udpConnections = insertEnd(udpConnections, connectionsHandler(false));
+            break;
+        case '?':
+            printf("get error\n");
+            break;
+        default:
+            printf("default\n");
+            break;
+        }
+    }
+
+    // handle any remaining command line arguments (not options).
+    if (optind < argc)
+    {
+        printf("non-option ARGV-elements: ");
+        while (optind < argc)
+        {
+            filterStr = concatStrs(filterStr, argv[optind++]);
+            filterStr = concatStrs(filterStr, " ");
+        }
+        filterStr[strlen(filterStr)-1] = '\0';
+    }
+
+    // no argument is given
+    if ((tcpConnections == NULL) && (udpConnections == NULL))
+    {
+        // tcp
+        tcpConnections = initiateHead();
+        tcpConnections = insertEnd(tcpConnections, connectionsHandler(true));
+        
+        // udp
+        udpConnections = initiateHead();
+        udpConnections = insertEnd(udpConnections, connectionsHandler(false));
+    }
+
+    if (tcpConnections != NULL)
+    {
+        filterConnections(tcpConnections, filterStr);
+        printf("List of TCP connections:\n");
+        printConnections(tcpConnections);
+    }
+    if (udpConnections != NULL)
+    {
+        filterConnections(udpConnections, filterStr);
+        printf("List of UDP connections:\n");
+        printConnections(udpConnections);
+    }
+    
     return 0;
 }
