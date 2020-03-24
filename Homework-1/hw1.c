@@ -308,8 +308,8 @@ char* inodeToPID(char* inode)
 }
 
 
-// check regular expression
-bool checkRegex(char *regex, char *str)
+// check whether a string cointains a sub string
+bool checkStrContainsSubStr(char *subStr, char *str)
 {
     bool result;
 
@@ -318,10 +318,13 @@ bool checkRegex(char *regex, char *str)
     char msgbuf[100];
 
     /* Compile regular expression */
-    reti = regcomp(&pregex, regex, 0);
+    reti = regcomp(&pregex, subStr, 0);
     if (reti) {
-        fprintf(stderr, "Could not compile regex\n");
-        exit(EXIT_FAILURE);
+        // Could not compile regex ==> check normally, don't use regex
+        if (strstr(str, subStr) != NULL)
+            return true;
+        else
+            return false;
     }
 
     /* Execute regular expression */
@@ -370,10 +373,10 @@ void filterConnections(connection* connections, char* str)
     }
     while (tmp != NULL)
     {
-        if (!checkRegex(str, tmp->proto)
-            && !checkRegex(str, tmp->localAddress)
-            && !checkRegex(str, tmp->foreignAddress)
-            && !checkRegex(str, tmp->PIDProgram))
+        if (!checkStrContainsSubStr(str, tmp->proto)
+            && !checkStrContainsSubStr(str, tmp->localAddress)
+            && !checkStrContainsSubStr(str, tmp->foreignAddress)
+            && !checkStrContainsSubStr(str, tmp->PIDProgram))
         {
             previousNode->next = tmp->next;
         }
