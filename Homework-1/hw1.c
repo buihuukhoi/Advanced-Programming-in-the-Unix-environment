@@ -8,6 +8,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <regex.h>
 
 
 #define connectionsPath "/proc/net/"
@@ -33,15 +34,20 @@ typedef struct connection
 } connection;
 
 
+void handleFailingMalloc()
+{
+    fprintf(stderr, "Fatal: failed to allocate bytes!\n");
+    // abort();
+    exit(EXIT_FAILURE);
+}
+
+
 // concatenate 2 strings
 char* concatStrs(const char *s1, const char *s2)
 {
     char* result = malloc(strlen(s1) + strlen(s2) + 1); // +1 for the null-terminator
     if (result == NULL)
-    {
-        fprintf(stderr, "Fatal: failed to allocate bytes!\n");
-        abort();
-    }
+        handleFailingMalloc();
     strcpy(result, s1);
     strcat(result, s2);
     return result;
@@ -58,10 +64,7 @@ char* strToPort(char* str)
     }
     char* port = (char*) malloc(sizeof(char) * 6);
     if (port == NULL)
-    {
-        fprintf(stderr, "Fatal: failed to allocate bytes!\n");
-        abort();
-    }
+        handleFailingMalloc();
     unsigned int num = (unsigned int)strtol(str, NULL, 16);
     if(num == 0)
 	    return "*";
@@ -78,10 +81,7 @@ char* strToIp(char* str, bool ipv4)
         struct in_addr inaddr;
         char* buf = (char*) malloc(sizeof(char) * INET_ADDRSTRLEN);
         if (buf == NULL)
-        {
-            fprintf(stderr, "Fatal: failed to allocate bytes!\n");
-            abort();
-        }
+            handleFailingMalloc();
         
         // convert the hex-string to uint32
         inaddr.s_addr = (uint32_t)strtol(str, NULL, 16);
@@ -99,10 +99,7 @@ char* strToIp(char* str, bool ipv4)
         struct in6_addr in6addr;
         char* buf6 = (char*) malloc(sizeof(char) * INET6_ADDRSTRLEN);
         if (buf6 == NULL)
-        {
-            fprintf(stderr, "Fatal: failed to allocate bytes!\n");
-            abort();
-        }
+            handleFailingMalloc();
         
         for (int i=0; i<4; i++)
         {
@@ -136,10 +133,7 @@ char** parseStrToSubStrs(char* str, char* delim)
     int count = 0;
     char* tmp = (char*) malloc(sizeof(char) * strlen(str) + 1);
     if (tmp == NULL)
-    {
-        fprintf(stderr, "Fatal: failed to allocate bytes!\n");
-        abort();
-    }
+        handleFailingMalloc();
     strcpy(tmp, str);
 
 	char *ptr = strtok(tmp, delim);
@@ -153,10 +147,7 @@ char** parseStrToSubStrs(char* str, char* delim)
 
     result = malloc(sizeof(char*) * count);
     if (result == NULL)
-    {
-        fprintf(stderr, "Fatal: failed to allocate bytes!\n");
-        abort();
-    }
+        handleFailingMalloc();
     // copy sub-string to the array
     else    
     {
@@ -166,10 +157,7 @@ char** parseStrToSubStrs(char* str, char* delim)
         {
             char* tmpResult = (char*) malloc(sizeof(char) * strlen(ptr) + 1);
             if (tmpResult == NULL)
-            {
-                fprintf(stderr, "Fatal: failed to allocate bytes!\n");
-                abort();
-            }
+                handleFailingMalloc();
             strcpy(tmpResult, ptr);
             *(result + index++) = tmpResult;
             ptr = strtok(NULL, delim);
@@ -320,7 +308,44 @@ char* inodeToPID(char* inode)
 }
 
 
-// print information
+// check regular expression
+bool checkRegex(char *regex, char *str)
+{
+    bool result;
+
+    regex_t pregex;
+    int reti;
+    char msgbuf[100];
+
+    /* Compile regular expression */
+    reti = regcomp(&pregex, regex, 0);
+    if (reti) {
+        fprintf(stderr, "Could not compile regex\n");
+        exit(EXIT_FAILURE);
+    }
+
+    /* Execute regular expression */
+    reti = regexec(&pregex, str, 0, NULL, 0);
+    if (!reti) {
+        return true;
+    }
+    else if (reti == REG_NOMATCH) {
+        return false;
+    }
+    else {
+        regerror(reti, &pregex, msgbuf, sizeof(msgbuf));
+        fprintf(stderr, "Regex match failed: %s\n", msgbuf);
+        exit(EXIT_FAILURE);
+    }
+
+    /* Free memory allocated to the pattern buffer by regcomp() */
+    regfree(&pregex);
+
+    return result;
+}
+
+
+// print connection information
 void printConnections(connection* connections)
 {
     connection* tmp = connections;
@@ -345,10 +370,10 @@ void filterConnections(connection* connections, char* str)
     }
     while (tmp != NULL)
     {
-        if (strstr(tmp->proto, str) == NULL
-            && strstr(tmp->localAddress, str) == NULL
-            && strstr(tmp->foreignAddress, str) == NULL
-            && strstr(tmp->PIDProgram, str) == NULL)
+        if (!checkRegex(str, tmp->proto)
+            && !checkRegex(str, tmp->localAddress)
+            && !checkRegex(str, tmp->foreignAddress)
+            && !checkRegex(str, tmp->PIDProgram))
         {
             previousNode->next = tmp->next;
         }
@@ -365,10 +390,7 @@ connection* createNode(char* proto, char* localAddress, char* foreignAddress, ch
     // create a link
     connection* node = (connection*) malloc(sizeof(connection));
     if (node == NULL)
-    {
-        fprintf(stderr, "Fatal: failed to allocate bytes!\n");
-        abort();
-    }
+        handleFailingMalloc();
     strcpy(node->proto, proto);
     strcpy(node->localAddress, localAddress);
     strcpy(node->foreignAddress, foreignAddress);
@@ -428,10 +450,7 @@ connection* dumpFileToConnections(char* connectionType, connection* connections)
 
     char* fileName = (char*) malloc(sizeof(char) * (strlen(connectionsPath) + strlen(connectionsPath) + 1));
     if (fileName == NULL)
-    {
-        fprintf(stderr, "Fatal: failed to allocate bytes!\n");
-        abort();
-    }
+        handleFailingMalloc();
     strcpy(fileName, connectionsPath);
     strcat(fileName, connectionType);
 
@@ -512,7 +531,7 @@ int main(int argc, char **argv)
             break;
         case '?':
             printf("get error\n");
-            break;
+            exit(EXIT_FAILURE);
         default:
             printf("default\n");
             break;
@@ -522,7 +541,6 @@ int main(int argc, char **argv)
     // handle any remaining command line arguments (not options).
     if (optind < argc)
     {
-        printf("non-option ARGV-elements: ");
         while (optind < argc)
         {
             filterStr = concatStrs(filterStr, argv[optind++]);
