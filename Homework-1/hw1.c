@@ -12,6 +12,8 @@
 #define connectionsPath "/proc/net/"
 #define tcp "tcp"
 #define tcp6 "tcp6"
+#define udp "udp"
+#define udp6 "udp6"
 
 char proc[] = "/proc";
 char cmdline[] = "/cmdline";
@@ -68,31 +70,60 @@ char* strToPort(char* str)
 
 
 // convert String to IP address
-char* strToIp(char* str)
+char* strToIp(char* str, bool ipv4)
 {
-    struct in_addr inaddr;
-    struct in6_addr in6addr;
-    char* buf = (char*) malloc(sizeof(char) * INET_ADDRSTRLEN);
-    if (buf == NULL)
+    if (ipv4)
     {
-        fprintf(stderr, "Fatal: failed to allocate bytes!\n");
-        abort();
-    }
-    char* buf6 = (char*) malloc(sizeof(char) * INET6_ADDRSTRLEN);
-    if (buf6 == NULL)
-    {
-        fprintf(stderr, "Fatal: failed to allocate bytes!\n");
-        abort();
+        struct in_addr inaddr;
+        char* buf = (char*) malloc(sizeof(char) * INET_ADDRSTRLEN);
+        if (buf == NULL)
+        {
+            fprintf(stderr, "Fatal: failed to allocate bytes!\n");
+            abort();
+        }
+        
+        // convert the hex-string to uint32
+        inaddr.s_addr = (uint32_t)strtol(str, NULL, 16);
+        if (inet_ntop(AF_INET, &inaddr.s_addr, buf, INET_ADDRSTRLEN) != NULL)
+            return buf;
+        else 
+        {
+            perror("inet_ntop");
+            exit(EXIT_FAILURE);
+        }
     }
 
-    // convert the hex-string to uint32
-	inaddr.s_addr = (unsigned int)strtol(str, NULL, 16);
-	if (inet_ntop(AF_INET, &inaddr.s_addr, buf, INET_ADDRSTRLEN) != NULL)
-    	return buf;
-    else 
+    else
     {
-        perror("inet_ntop");
-        exit(EXIT_FAILURE);
+        struct in6_addr in6addr;
+        char* buf6 = (char*) malloc(sizeof(char) * INET6_ADDRSTRLEN);
+        if (buf6 == NULL)
+        {
+            fprintf(stderr, "Fatal: failed to allocate bytes!\n");
+            abort();
+        }
+        
+        for (int i=0; i<4; i++)
+        {
+            char subStr[9];
+            memcpy(subStr, &str[8*i], 8);
+            subStr[9] = '\0';
+            for(int j=0; j<4; j++)
+            {
+                char sub[3];
+                memcpy(sub, &subStr[2*j], 2);
+                sub[3] = '\0';
+                // convert the hex-string to uint8
+                in6addr.s6_addr[4*i + 3 - j] = (uint8_t)strtol(sub, NULL, 16);
+            } 
+        }
+    	if (inet_ntop(AF_INET6, &in6addr.s6_addr, buf6, INET6_ADDRSTRLEN) != NULL)
+            return buf6;
+        else 
+        {
+            perror("inet_ntop");
+            exit(EXIT_FAILURE);
+        }
     }
 }
 
@@ -148,16 +179,18 @@ char** parseStrToSubStrs(char* str, char* delim)
 
 
 // format IP address and port from hex-string to dec-string
-char* formatIpAndPort(char* str)
+char* formatIpAndPort(char* str, bool ipv4)
 {
     char* colon = ":";
     // split ip and port for local_address by ":"
     char** ipAndPort = parseStrToSubStrs(str, colon);
-    char* ip = strToIp(ipAndPort[0]);
+    char* ip = strToIp(ipAndPort[0], ipv4);
     char* port = strToPort(ipAndPort[1]);
     char* ipColon = concatStrs(ip, colon);
     char* ipColonPort = concatStrs(ipColon, port);
-    if (strlen(ipColonPort) < 16) // 16 space ~ 2 tab
+    if (strlen(ipColonPort) < 8)
+        ipColonPort = concatStrs(ipColonPort, "\t\t");
+    else if (strlen(ipColonPort) < 16) // 16 space ~ 2 tab
         ipColonPort = concatStrs(ipColonPort, "\t");
     return ipColonPort;
 }
@@ -295,6 +328,7 @@ void printConnections(connection* connections)
         printf("%s\t%s\t%s\t%s\n", tmp->proto, tmp->localAddress, tmp->foreignAddress, tmp->PIDProgram);
         tmp = tmp->next;
     }
+    printf("\n");
 }
 
 
@@ -360,7 +394,10 @@ connection* dumpFileToConnections(char* connectionType, connection* connections)
     size_t len = 0;
     size_t read;
     char* space = " ";
-    char* colon = ":";
+    bool ipv4 = true;
+
+    if (strstr(connectionType, "6") != NULL)
+        ipv4 = false;
 
     char* fileName = (char*) malloc(sizeof(char) * (strlen(connectionsPath) + strlen(connectionsPath) + 1));
     if (fileName == NULL)
@@ -382,8 +419,8 @@ connection* dumpFileToConnections(char* connectionType, connection* connections)
         // split line by space
         char** subString = parseStrToSubStrs(line, space);
         // format ip and port address
-        char* localAddress = formatIpAndPort(subString[1]);
-        char* foreignAddress = formatIpAndPort(subString[2]);    
+        char* localAddress = formatIpAndPort(subString[1], ipv4);
+        char* foreignAddress = formatIpAndPort(subString[2], ipv4);    
         // create a connection node
         connection* node = createNode(connectionType, localAddress, foreignAddress, inodeToPID(subString[9]));
         connections = insertEnd(connections, node);
@@ -398,20 +435,37 @@ connection* dumpFileToConnections(char* connectionType, connection* connections)
 
 
 // handle TCP connections
-connection* TCP_Handler()
+connection* connectionsHandler(bool tcpFlag)
 {
     connection* TCPConnections = NULL;
-    // read tcp connections
-    TCPConnections = dumpFileToConnections(tcp, TCPConnections);
-    TCPConnections = dumpFileToConnections(tcp6, TCPConnections);
+    if (tcpFlag)
+    {
+        // read tcp connections
+        TCPConnections = dumpFileToConnections(tcp, TCPConnections);
+        TCPConnections = dumpFileToConnections(tcp6, TCPConnections);
+    }
+    else
+    {
+        // read udp connections
+        TCPConnections = dumpFileToConnections(udp, TCPConnections);
+        TCPConnections = dumpFileToConnections(udp6, TCPConnections);
+    }
     return TCPConnections;
 };
 
 
 int main(int argc, char **argv[])
 {
-    connection* connections = initiateHead();    
-    connections = insertEnd(connections, TCP_Handler());
-    printConnections(connections);
+    // tcp
+    connection* tcpConnections = initiateHead();
+    tcpConnections = insertEnd(tcpConnections, connectionsHandler(true));
+    printf("List of TCP connections:\n");
+    printConnections(tcpConnections);
+
+    // udp
+    connection* udpConnections = initiateHead();
+    udpConnections = insertEnd(udpConnections, connectionsHandler(false));
+    printf("List of UDP connections:\n");
+    printConnections(udpConnections);
     return 0;
 }
