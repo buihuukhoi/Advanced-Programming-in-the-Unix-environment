@@ -21,6 +21,7 @@ char proc[] = "/proc";
 char cmdline[] = "/cmdline";
 char fd[] = "/fd";
 char slash[] = "/";
+char space[] = " ";
 
 
 // define a truct to store a connection information
@@ -125,6 +126,22 @@ char* strToIp(char* str, bool ipv4)
     }
 }
 
+// get program name
+char* getProgramName(char* str)
+{
+    char* processName;
+    char *ptr = strtok(str, "/");
+    while (ptr != NULL)
+    {
+        processName = ptr;
+        ptr = strtok(NULL, "/");
+    }
+    if (processName == NULL)
+        processName = "";
+
+    return processName;
+}
+
 
 // parse a string to sub strings
 char** parseStrToSubStrs(char* str, char* delim)
@@ -199,7 +216,7 @@ bool checkStrContainNums(char* str)
 // // get "PID/Program name and arguments" from an PID 
 char* getPIDProcNameAndArg(char* PID)
 {
-    char* result = PID;
+    char* result = concatStrs(PID, slash);
 
     char cmdlinePath[50];
     strcpy(cmdlinePath, proc);
@@ -217,7 +234,16 @@ char* getPIDProcNameAndArg(char* PID)
     if (fp == NULL)
         exit(EXIT_FAILURE);
     while ((read = getline(&line, &len, fp)) != -1) {
-        result = concatStrs(result, line);
+        // handle program name and arguments
+        char *arguments = strtok(line, " ");
+        arguments = strtok(NULL, "");
+        if (arguments == NULL)
+            arguments = "";
+        char* programName = getProgramName(line);
+
+        result = concatStrs(result, programName);
+        result = concatStrs(result, " ");
+        result = concatStrs(result, arguments);
     }
 
     if (line)
@@ -445,7 +471,7 @@ connection* dumpFileToConnections(char* connectionType, connection* connections)
     char * line = NULL;
     size_t len = 0;
     size_t read;
-    char* space = " ";
+//    char* space = " ";
     bool ipv4 = true;
 
     if (strstr(connectionType, "6") != NULL)
@@ -533,7 +559,7 @@ int main(int argc, char **argv)
             udpConnections = insertEnd(udpConnections, connectionsHandler(false));
             break;
         case '?':
-            printf("get error\n");
+            printf("get error!!!\n");
             exit(EXIT_FAILURE);
         default:
             printf("default\n");
