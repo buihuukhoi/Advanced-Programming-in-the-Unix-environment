@@ -269,7 +269,7 @@ bool checkInodeMatchPID(char* inode, char* PID)
     pDir = opendir(fdPath);
     if (pDir == NULL)
     {
-        // printf ("Cannot open directory %s, try checking permission OR this directory is blocked by other OR this process is killed!\n", fdPath);
+        // printf ("Cannot open directory %s, try checking permission!\n", fdPath);
         // exit(EXIT_FAILURE);
         return result;
     }
