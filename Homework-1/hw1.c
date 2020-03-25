@@ -269,34 +269,37 @@ bool checkInodeMatchPID(char* inode, char* PID)
     pDir = opendir(fdPath);
     if (pDir == NULL)
     {
-            printf ("Cannot open directory %s, try checking permission OR this directory is blocked by other OR this process is killed!\n", fdPath);
-            exit(EXIT_FAILURE);
+        // printf ("Cannot open directory %s, try checking permission OR this directory is blocked by other OR this process is killed!\n", fdPath);
+        // exit(EXIT_FAILURE);
+        return result;
     }
-
-    // read each entry into the directory that opened above
-    struct dirent* pDirEntry;
-    while ((pDirEntry = readdir(pDir)) != NULL)
+    else
     {
-        char* name = pDirEntry->d_name;
-        if (checkStrContainNums(name))
+        // read each entry into the directory that opened above
+        struct dirent* pDirEntry;
+        while ((pDirEntry = readdir(pDir)) != NULL)
         {
-            char path[50];
-            strcpy(path, fdPath);
-            strcat(path, slash);
-            strcat(path, name); // example: /proc/[PID]/fd/[numbers]
-
-            //read a Synbolic Link
-            char bufSymbolicLink[256] = "";
-            readlink(path, bufSymbolicLink, sizeof(bufSymbolicLink));
-            if (strstr(bufSymbolicLink, inode) != NULL)
+            char* name = pDirEntry->d_name;
+            if (checkStrContainNums(name))
             {
-                result = true;
-                break;
+                char path[50];
+                strcpy(path, fdPath);
+                strcat(path, slash);
+                strcat(path, name); // example: /proc/[PID]/fd/[numbers]
+
+                //read a Synbolic Link
+                char bufSymbolicLink[256] = "";
+                readlink(path, bufSymbolicLink, sizeof(bufSymbolicLink));
+                if (strstr(bufSymbolicLink, inode) != NULL)
+                {
+                    result = true;
+                    break;
+                }
             }
         }
-    }
 
-    closedir(pDir);
+        closedir(pDir);
+    }
 
     return result;
 }
@@ -305,7 +308,7 @@ bool checkInodeMatchPID(char* inode, char* PID)
 // get "PID/Program name and arguments" from an inode
 char* inodeToPID(char* inode)
 {
-    char* result = "";
+    char* result = NULL;
 
     // open a directory
     DIR* pDir; // pointer directory
@@ -329,6 +332,10 @@ char* inodeToPID(char* inode)
     }
 
     closedir(pDir);
+
+    // cannot get some information because of limitted privilege
+    if (result == NULL)
+        result = "-";
 
     return result;
 }
