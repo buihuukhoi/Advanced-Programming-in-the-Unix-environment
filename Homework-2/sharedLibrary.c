@@ -13,7 +13,7 @@
 
 
 #define LibC "libc.so.6"
-#define sandbox_monitor "sandbox_monitor.txt"
+#define monitor_sandbox "monitor_sandbox.txt"
 #define MAXARGS 31
 
 static int (*old_chdir)(const char *path) = NULL;
@@ -63,17 +63,6 @@ FILE* ErrFile = NULL;
             exit(EXIT_FAILURE);\
         }\
     }
-
-/*
-#define OPEN_MONITOR_FILE()\
-    if (ErrFile == NULL){\
-        if((ErrFile = old_fopen(sandbox_monitor, "ab")) == NULL){\
-            char myErrMess[1024];\
-            snprintf(myErrMess, sizeof(myErrMess), "[sandbox] fopen(\"%s\")", sandbox_monitor);\
-            perror(myErrMess);\
-        }\
-    }
-*/
     
 #define EXECUTE_OLD_FUNCTION_1_PARAM(name, formatRetStr, param1, formatStr1)\
     if(old_##name != NULL)\
@@ -111,9 +100,9 @@ FILE* ErrFile = NULL;
 __attribute__((constructor)) static void beforeMain(){
     HANDLE_OLD_FUNC(fopen);
     if (ErrFile == NULL){
-        if((ErrFile = old_fopen(sandbox_monitor, "ab")) == NULL){
+        if((ErrFile = old_fopen(monitor_sandbox, "ab")) == NULL){
             char myErrMess[1024];
-            snprintf(myErrMess, sizeof(myErrMess), "[sandbox] fopen(\"%s\")", sandbox_monitor);
+            snprintf(myErrMess, sizeof(myErrMess), "[sandbox] fopen(\"%s\")", monitor_sandbox);
             perror(myErrMess);
         }
     }
@@ -122,12 +111,22 @@ __attribute__((constructor)) static void beforeMain(){
 void openMonitorFile(){
     if (ErrFile == NULL){
         HANDLE_OLD_FUNC(fopen);
-        if((ErrFile = old_fopen(sandbox_monitor, "ab")) == NULL){
+        if((ErrFile = old_fopen(monitor_sandbox, "ab")) == NULL){
             char myErrMess[1024];
-            snprintf(myErrMess, sizeof(myErrMess), "[sandbox] fopen(\"%s\")", sandbox_monitor);
+            snprintf(myErrMess, sizeof(myErrMess), "[sandbox] fopen(\"%s\")", monitor_sandbox);
             perror(myErrMess);
         }
     }
+}
+
+void handleRejectedFunc(char *funcName, const char *pathName)
+{
+    openMonitorFile();
+    if (ErrFile != NULL){
+        fprintf(ErrFile, "[sandbox] %s(%s): not allowed\n", funcName, pathName);
+    }
+    fprintf(stderr, "[sandbox] %s(%s): not allowed\n", funcName, pathName);
+    errno = EACCES;
 }
 
 void handlePermissionErr(char *funcName, const char *pathName)
@@ -150,8 +149,6 @@ bool checkPathUnderPath(char* path, char* baseDir){
 }
 
 bool checkPathUnderBaseDir(const char *pathname){
-//    HANDLE_OLD_FUNC(chdir);
-
     char *baseDir, *path;
     if((baseDir = realpath(getenv("BASE_DIR"), NULL)) == NULL){
         if (ErrFile != NULL)
@@ -293,12 +290,12 @@ int __xstat(int ver, const char *path, struct stat *stat_buf){
     if(old___xstat != NULL)
         returnedValue = old___xstat(ver, path, stat_buf);
 
-    openMonitorFile();\
-    if (ErrFile != NULL)\
+    openMonitorFile();
+    if (ErrFile != NULL)
         fprintf(ErrFile, "[sandbox] stat(%s, %p {st_ino=%lu, st_mode=%u, st_size=%ld, ...}) = %d\n", \
                     path, stat_buf, stat_buf->st_ino, stat_buf->st_mode, stat_buf->st_size, \
                     returnedValue);
-                    
+
     return returnedValue;
 }
 
@@ -321,7 +318,7 @@ int unlink(const char *path){
 /* exec* and system parts */
 
 int execl(const char *path, const char *arg, ...){
-    handlePermissionErr("execl", path);
+    handleRejectedFunc("execl", path);
     if (ErrFile != NULL)
         fclose(ErrFile);
     return -1;
@@ -329,7 +326,7 @@ int execl(const char *path, const char *arg, ...){
 
 int execle(const char *pathname, const char *arg, ...
                        /*, (char *) NULL, char *const envp[] */){
-    handlePermissionErr("execle", pathname);
+    handleRejectedFunc("execle", pathname);
     if (ErrFile != NULL)
         fclose(ErrFile);
     return -1;
@@ -337,35 +334,35 @@ int execle(const char *pathname, const char *arg, ...
 
 
 int execlp(const char *file, const char *arg, .../* (char  *) NULL */){
-    handlePermissionErr("execlp", file);
+    handleRejectedFunc("execlp", file);
     if (ErrFile != NULL)
         fclose(ErrFile);
     return -1;
 }
 
 int execv(const char *pathname, char *const argv[]){
-    handlePermissionErr("execv", pathname);
+    handleRejectedFunc("execv", pathname);
     if (ErrFile != NULL)
         fclose(ErrFile);
     return -1;
 }
 
 int execve(const char *filename, char *const argv[], char *const envp[]){
-    handlePermissionErr("execve", filename);
+    handleRejectedFunc("execve", filename);
     if (ErrFile != NULL)
         fclose(ErrFile);
     return -1;
 }
 
 int execvp(const char *file, char *const argv[]){
-    handlePermissionErr("execvp", file);
+    handleRejectedFunc("execvp", file);
     if (ErrFile != NULL)
         fclose(ErrFile);
     return -1;
 }
 
 int system(const char *command){
-    handlePermissionErr("system", command);
+    handleRejectedFunc("system", command);
     if (ErrFile != NULL)
         fclose(ErrFile);
     return -1;
