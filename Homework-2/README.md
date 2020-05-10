@@ -5,7 +5,10 @@
     launcher (2) (e.g., sandbox)
 
 ## Monitored functions:
-    Note: monitor_sandbox.txt is used to log information and error messages from the sandbox
+    Note:   - monitor_sandbox.txt is used to log information and error messages from the sandbox
+            - If an access to an invalid path is detected or the use of "system or exec*" is rejected,
+                the functions will return -1 (if int) or NULL (if pointer) and the errno will be set
+                to EACCES (permission denied).
 
     File/directory-relevant functions:
     chdir
