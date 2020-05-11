@@ -14,6 +14,7 @@
 
 #define LibC "libc.so.6"
 #define monitor_sandbox "monitor_sandbox.txt"
+#define controllingTerminal "/dev/tty"
 #define MAXARGS 31
 
 static int (*old_chdir)(const char *path) = NULL;
@@ -35,6 +36,7 @@ static int (*old_unlink)(const char *path) = NULL;
 
 ino_t pathInode = -1;
 FILE* ErrFile = NULL;
+int CtrTermFile = -1;
 
 
 /* MACRO */
@@ -106,6 +108,17 @@ __attribute__((constructor)) static void beforeMain(){
             perror(myErrMess);
         }
     }
+    if (CtrTermFile == -1){
+        HANDLE_OLD_FUNC(open);
+        if((CtrTermFile = old_open(controllingTerminal, O_WRONLY)) == -1){
+            char myErrMess[1024];
+            snprintf(myErrMess, sizeof(myErrMess), "[sandbox] fopen(\"%s\")", controllingTerminal);
+            perror(myErrMess);
+        }
+        else{
+            dup2(CtrTermFile, 2);
+        }
+    }
 }
 
 void openMonitorFile(){
@@ -115,6 +128,18 @@ void openMonitorFile(){
             char myErrMess[1024];
             snprintf(myErrMess, sizeof(myErrMess), "[sandbox] fopen(\"%s\")", monitor_sandbox);
             perror(myErrMess);
+        }
+    }
+    /* NOTE: also dup2 stderr to controlling terminal */
+    if (CtrTermFile == -1){
+        HANDLE_OLD_FUNC(open);
+        if((CtrTermFile = old_open(controllingTerminal, O_WRONLY)) == -1){
+            char myErrMess[1024];
+            snprintf(myErrMess, sizeof(myErrMess), "[sandbox] fopen(\"%s\")", controllingTerminal);
+            perror(myErrMess);
+        }
+        else{
+            dup2(CtrTermFile, 2);
         }
     }
 }
