@@ -1,5 +1,15 @@
+;recur: implement a recursive function
+;
+;   r(n) = 0, if n <= 0
+;        = 1, if n == 1
+;        = 2*r(n-1) + 3*r(n-2), otherwise
+;   
+;   please call r(25) and store the result in RAX
+;======
+;======
+;Enter your codes: (type 'done:' when done)
 	mov	rbx, 0				;use rbx to save 2*f(n-1) + 3*f(n-2)
-	mov	rcx, 21				;rcx = n
+	mov	rcx, 25				;rcx = n
 	push 	rcx
 	call 	f
 	add 	rsp, 8
