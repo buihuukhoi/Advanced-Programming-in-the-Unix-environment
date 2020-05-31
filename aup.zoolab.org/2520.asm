@@ -1,0 +1,3 @@
+xchg	eax, ebx
+done:
+
