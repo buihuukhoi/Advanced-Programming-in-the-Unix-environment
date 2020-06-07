@@ -1,0 +1,17 @@
+In this challenges I used GDB to find the flag.
+When I try to run the executable file traceme2 by "./traceme2". I showed the message "trace me, please".
+Now we take a look in "traceme2.c". We can see that message is inside the handler function.
+And the reason is traceme2 will use raise to send the signal SIGTRAP to itself, and trigger handler func.
+Then I tried to run traceme2 with GDB by command "gdb ./traceme2" --> run --> c --> we can see the message "traced".
+Because traceme2 will send the signal SIGTRAP to caller GDB --> we can pypass handler() at traceme2.
+By checking in traceme2.c, we can see that after 'print("traced\n")', the main function will copy some data from 'data' to 'output'.
+So if we can dump the value of output before the main returns 0, we can get the message (flag) from variable output.
+Now I run traceme2 with gdb, breakpoint at main, dump 50 instruction from main, breakpoint before main returns 0, print output.
+gdb ./traceme2
+b main
+r
+x/50i main
+b *0x5555555548bc (<main+152>:	mov    eax,0x0)
+c --> we are stoppep because of SIGTRAP at raise(SIGTRAP)
+c --> we are staying at breakpoint2 (mov	eax 0x0)
+print output --> get the flag.
