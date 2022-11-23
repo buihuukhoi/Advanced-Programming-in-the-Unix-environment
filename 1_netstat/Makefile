@@ -1,4 +1,4 @@
-OBJS = hw1.o library.o
+OBJS = netstat.o library.o
 CC = gcc
 
 my_netstat: ${OBJS}
