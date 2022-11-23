@@ -1,3 +1,16 @@
+# Usage
+LD_PRELOAD=./sandbox.so ./sandbox `your_commands`
+    
+    your_commands examples:
+        ls
+        -- ls -a
+        -- ls /
+        -- ls -la / Makefile
+        -- ls -la / Makefile >/dev/null
+        -- sh -c 'ls'
+        
+    LD_PRELOAD is used to inject library
+
 # Read me - monitor function
     In this homework, we are going to practice library injection and API hijacking.
     Implementation of the sandbox as a shared library (1) (e.g., sandbox.so) and 
