@@ -1,6 +1,15 @@
-all: hw1.c
-	gcc hw1.c -o hw1
+OBJS = hw1.o library.o
+CC = gcc
+
+my_netstat: ${OBJS}
+	${CC} ${OBJS} -o $@
 	@echo "Applying permissions..."
 	chmod 555 Makefile
-	chmod 555 hw1
+	chmod 555 my_netstat
+
+clean:
+	-rm -f *.o core *.core
+
+.c.o:
+	${CC} -c $<
 
